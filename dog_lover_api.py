@@ -86,6 +86,9 @@ class TransformAndLoad:
 
         df.to_csv(self.file, index=False)
 
+    def load(self):
+        pass
+
 
     def load_data(self):
         pass
