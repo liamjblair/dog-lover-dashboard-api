@@ -3,6 +3,7 @@ import constants
 import pandas as pd
 import csv
 from dataclasses import dataclass
+from sqlalchemy import create_engine
 
 
 @dataclass
@@ -52,7 +53,7 @@ class DogAPIHandler:
         self.write_data(self.dog_data)
         
     def write_data(self, data):
-        output_file = "dog_lover_data.csv"
+        output_file = "dog_lover_data_input.csv"
         headers = ["id", "name", "bred_for", "breed_group", "weight", "height", "life_span", "temperament", "origin", "image"]
 
         with open(output_file, mode="w", newline="") as f:
@@ -62,15 +63,27 @@ class DogAPIHandler:
                 writer.writerow([dog.id, dog.name, dog.bred_for, dog.breed_group, dog.weight, dog.height, dog.life_span, dog.temperament, dog.origin, dog.image])
 
 
-class TransformAndLoad:
+class DogTransformAndLoad:
 
-    # TODO complete transfrom and load class
-
-    def __init__(self, file) -> None:
-        self.file = file
+    def __init__(self, 
+                 db_user, 
+                 db_password, 
+                 db_host, 
+                 db_port, 
+                 db_name, 
+                 db_table, 
+                 input_file):
+        
+        self.db_user = db_user
+        self.db_password = db_password
+        self.db_host = db_host
+        self.db_port = db_port
+        self.db_name = db_name
+        self.db_table = db_table
+        self.input_file = input_file
 
     def transform_data(self):
-        df = pd.read_csv(self.file)
+        df = pd.read_csv(self.input_file, encoding="Windows-1252")
 
         # split weight into min and max
         df['weight_min'] = df["weight"].str.extract(r"^(\d+)").fillna(0).astype(int)
@@ -82,25 +95,52 @@ class TransformAndLoad:
 
         # split life span into min and max
         df['life_span_min'] = df["life_span"].str.extract(r"^(\d+)").fillna(0).astype(int)
-        df['life_span_max'] = df["life_span"].str.extract(r"- (\d+)").fillna(0).astype(int)          
+        df['life_span_max'] = df["life_span"].str.extract(r" (\d+) ").fillna(0).astype(int)        
 
-        df.to_csv(self.file, index=False)
-
-    def load(self):
-        pass
-
+        # create output file
+        self.output_file = "dog_lover_data_output.csv"
+        df.to_csv(self.output_file, index=False)
 
     def load_data(self):
-        pass
+
+        """load data in target db table"""
+
+        df = pd.read_csv(self.output_file)
+
+        try:
+            conn_str = f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+            db_engine = create_engine(conn_str)
+
+            # Write data to PostgreSQL database
+            df.to_sql(self.db_table, db_engine, if_exists="replace", index=False)
+
+            db_engine.dispose()
+        except Exception as e:
+            print(f"Following error ocurring attemping to load data into posgres db - {e}")
+
 
 def main():
+    fetch_dogs = DogAPIHandler()
+    fetch_dogs.fetch_dog_data()
+    fetch_dogs.process_data()                
 
-    output_file = "dog_lover_data.csv"
+    input_file = "dog_lover_data_input.csv"
+    db_tbl = "dog_lover_data"
+    db_user = constants.DB_USER
+    db_password = constants.DB_PASSWORD
+    db_host = constants.DB_HOST
+    db_port = constants.DB_PORT
+    db_name = constants.DB_NAME
 
-    d = DogAPIHandler()
-    d.fetch_dog_data()
-    d.process_data()                
-
+    load_dogs = DogTransformAndLoad(db_user,
+                                    db_password,
+                                    db_host,
+                                    db_port,
+                                    db_name,
+                                    db_tbl,
+                                    input_file)
+    load_dogs.transform_data()
+    load_dogs.load_data()
 
 if __name__ == "__main__":
     main()
