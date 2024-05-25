@@ -1,7 +1,6 @@
 
 import psycopg2
 import constants
-import pandas as pd
 
 # Establish connection to the PostgreSQL database
 conn = psycopg2.connect(
